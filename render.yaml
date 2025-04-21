@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: asw-api
+    env: python
+    buildCommand: ""
+    startCommand: gunicorn app:app
