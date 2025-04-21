@@ -7,7 +7,6 @@ app = Flask(__name__)
 
 @app.route('/sketch', methods=['POST'])
 def sketch():
-    # استلام الصورة كـ raw data
     img_array = np.frombuffer(request.data, np.uint8)
     img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
     
