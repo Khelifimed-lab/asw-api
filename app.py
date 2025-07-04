@@ -1,3 +1,10 @@
+from flask import Flask, request, send_file
+import cv2
+import numpy as np
+import io
+
+app = Flask(__name__)
+
 @app.route('/sketch', methods=['POST'])
 def sketch():
     img_array = np.frombuffer(request.data, np.uint8)
@@ -6,16 +13,18 @@ def sketch():
     if img is None:
         return "Invalid image", 400
 
-    # تحويل لصورة رمادية
+    # نحول الصورة إلى رمادي فقط لتحليل اللون
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    inv = 255 - gray
-    blur = cv2.GaussianBlur(inv, (21, 21), 0)
 
-    # توليد الرسم بخط ناعم
-    sketch = cv2.divide(gray, 255 - blur, scale=256)
+    # نحدد كل ما هو قريب من الأسود (قيم رمادية أقل من 50)
+    mask_black = gray < 50  # كل شيء غامق جدًا
 
-    # تعزيز طفيف للتباين إذا رغبت
-    sketch = np.clip(sketch * 1.2, 0, 255).astype(np.uint8)
+    # نحول كل الصورة إلى أبيض
+    result = np.full_like(gray, 255)
 
-    _, buf = cv2.imencode('.png', sketch)
+    # نعيد البكسلات السوداء فقط كما كانت
+    result[mask_black] = gray[mask_black]
+
+    # تحويل للتنسيق المناسب للإرجاع
+    _, buf = cv2.imencode('.png', result)
     return send_file(io.BytesIO(buf), mimetype='image/png')
