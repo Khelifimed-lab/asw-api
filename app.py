@@ -1,3 +1,9 @@
+from flask import Flask, request, send_file
+import cv2
+import numpy as np
+import io
+
+app = Flask(__name__)
 @app.route('/sketch', methods=['POST'])
 def sketch():
     img_array = np.frombuffer(request.data, np.uint8)
