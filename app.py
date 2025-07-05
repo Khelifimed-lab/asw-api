@@ -12,36 +12,50 @@ def sketch():
     if img is None:
         return "Invalid image", 400
 
+    # تحويل الصورة إلى رمادي
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    mean_brightness = np.mean(gray)
-    contrast = gray.std()
 
-    # 1. Otsu threshold + تعويض ذكي
+    # --- تحليل تلقائي لخصائص الصورة ---
+    mean_brightness = np.mean(gray)      # متوسط الإضاءة
+    contrast = np.std(gray)              # التباين
     otsu_thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[0]
-    adjusted_thresh = max(0, otsu_thresh - (5 if mean_brightness < 100 else 15))
+
+    # --- تحديد العتبة تلقائيًا حسب السطوع والتباين ---
+    if contrast < 15:
+        adjusted_thresh = max(0, otsu_thresh - 5)
+    elif contrast > 50:
+        adjusted_thresh = max(0, otsu_thresh - 20)
+    else:
+        adjusted_thresh = max(0, otsu_thresh - 10)
+
+    # تعديل إضافي حسب الإضاءة
+    if mean_brightness < 80:
+        adjusted_thresh += 5
+    elif mean_brightness > 180:
+        adjusted_thresh -= 5
+
+    # قناع البكسلات السوداء
     black_mask = gray <= adjusted_thresh
 
-    # 2. عكس الصورة
-    inv = 255 - gray
+    # --- ضبط Gaussian Blur حسب حجم الصورة ---
+    h, w = gray.shape
+    blur_size = max(5, min(31, ((h + w) // 150) | 1))  # فردي دائمًا
+    blur = cv2.GaussianBlur(255 - gray, (blur_size, blur_size), 0)
 
-    # 3. Gaussian Blur مخصص حسب الحجم
-    height, width = gray.shape[:2]
-    blur_strength = max(5, min(21, (width + height) // 150 | 1))
-    blur = cv2.GaussianBlur(inv, (blur_strength, blur_strength), 0)
-
-    # 4. scale حسب التباين
+    # --- ضبط تأثير الـ sketch حسب التباين ---
     if contrast < 20:
         scale = 200
-    elif contrast > 50:
+    elif contrast > 60:
         scale = 300
     else:
         scale = 256
 
-    # 5. توليد رسم سكيتش
+    # تنفيذ تأثير الرسم
     sketch = cv2.divide(gray, 255 - blur, scale=scale)
 
-    # 6. إعادة البكسلات السوداء الأصلية
+    # إعادة الخطوط السوداء الأصلية كما هي
     sketch[black_mask] = gray[black_mask]
 
+    # تجهيز الصورة للرد
     _, buf = cv2.imencode('.png', sketch)
     return send_file(io.BytesIO(buf), mimetype='image/png')
