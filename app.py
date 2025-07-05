@@ -13,20 +13,22 @@ def sketch():
     if img is None:
         return "Invalid image", 400
 
-    # 1. تحويل إلى رمادي
+    # تحويل إلى رمادي
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # 2. حفظ البكسلات الداكنة جدًا (سوداء تقريبًا)
-    black_mask = gray <= 60   # يمكنك تعديل القيمة حسب شدة اللون الأسود الذي تريد الحفاظ عليه
+    # حساب قيمة العتبة تلقائيًا
+    thresh_val = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[0]
 
-    # 3. تنفيذ تأثير الـ sketch (dodge blend)
+    # إنشاء قناع للبكسلات السوداء أو الداكنة حسب القيمة المحسوبة
+    black_mask = gray <= thresh_val
+
+    # تطبيق تأثير Sketch
     inv = 255 - gray
     blur = cv2.GaussianBlur(inv, (21, 21), 0)
     sketch = cv2.divide(gray, 255 - blur, scale=256)
 
-    # 4. إعادة إدراج البكسلات السوداء الأصلية كما هي
+    # استرجاع اللون الأسود الحقيقي
     sketch[black_mask] = gray[black_mask]
 
-    # 5. حفظ الصورة وإرسالها
     _, buf = cv2.imencode('.png', sketch)
     return send_file(io.BytesIO(buf), mimetype='image/png')
