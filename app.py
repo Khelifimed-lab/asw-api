@@ -12,18 +12,15 @@ def sketch():
     if img is None:
         return "Invalid image", 400
 
+    # 1. تحويل إلى رمادي
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    black_mask = gray <= 40  # بدل 30 حسب تجربتك
 
-    inv = 255 - gray
-    blur = cv2.GaussianBlur(inv, (21, 21), 0)
-    sketch = cv2.divide(gray, 255 - blur, scale=256)
+    # 2. إنشاء نسخة نظيفة: نحافظ على الأسود والرمادي الداكن فقط
+    # أي بكسل لونه أفتح من 200 → نخليه أبيض
+    cleaned = np.where(gray > 200, 255, gray).astype(np.uint8)
 
-    # إعادة اللون الأسود النقي فقط
-    sketch[black_mask] = 0
+    # 3. إزالة النقاط الصغيرة (ضوضاء) عبر فلتر خفيف
+    cleaned = cv2.medianBlur(cleaned, 3)
 
-    # إزالة كل الرماديات الطفيفة: فقط أسود أو أبيض
-    sketch = np.where(sketch < 30, 0, 255).astype(np.uint8)
-
-    _, buf = cv2.imencode('.png', sketch)
+    _, buf = cv2.imencode('.png', cleaned)
     return send_file(io.BytesIO(buf), mimetype='image/png')
