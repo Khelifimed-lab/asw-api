@@ -7,27 +7,29 @@ app = Flask(__name__)
 
 @app.route('/sketch', methods=['POST'])
 def sketch():
-    img_array = np.frombuffer(request.data, np.uint8)
-    img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-    if img is None:
-        return "Invalid image", 400
+    try:
+        # قراءة الصورة من بيانات البوست (raw)
+        img_array = np.frombuffer(request.data, np.uint8)
+        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+        if img is None:
+            return "Invalid image", 400
 
-    # 1. تحويل الصورة إلى رمادي
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        # تحويل إلى رمادي
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # 2. عكس الرمادي
-    inv = 255 - gray
+        # تطبيق تأثير الرسم
+        inv = 255 - gray
+        blur = cv2.GaussianBlur(inv, (21, 21), 0)
+        sketch = cv2.divide(gray, 255 - blur, scale=256)
+        sketch = cv2.normalize(sketch, None, 0, 255, cv2.NORM_MINMAX)
+        sketch = cv2.medianBlur(sketch, 3)
 
-    # 3. Gaussian Blur
-    blur = cv2.GaussianBlur(inv, (21, 21), 0)
+        # تجهيز الصورة للإرسال
+        _, buf = cv2.imencode('.png', sketch)
+        return send_file(io.BytesIO(buf), mimetype='image/png')
+    
+    except Exception as e:
+        return f"Error processing image: {str(e)}", 500
 
-    # 4. تأثير Pencil Sketch (color dodge blend)
-    sketch = cv2.divide(gray, 255 - blur, scale=256)
-
-    # 5. تعزيز بسيط للتباين بدون تدمير التفاصيل
-    sketch = cv2.normalize(sketch, None, 0, 255, cv2.NORM_MINMAX)
-    sketch = cv2.medianBlur(sketch, 3)  # تنعيم خفيف
-
-    # 6. تجهيز للإرسال
-    _, buf = cv2.imencode('.png', sketch)
-    return send_file(io.BytesIO(buf), mimetype='image/png')
+if __name__ == '__main__':
+    app.run(debug=True)
