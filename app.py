@@ -12,15 +12,22 @@ def sketch():
     if img is None:
         return "Invalid image", 400
 
-    # 1. تحويل إلى رمادي
+    # 1. تحويل الصورة إلى رمادي
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # 2. إنشاء نسخة نظيفة: نحافظ على الأسود والرمادي الداكن فقط
-    # أي بكسل لونه أفتح من 200 → نخليه أبيض
-    cleaned = np.where(gray > 200, 255, gray).astype(np.uint8)
+    # 2. عكس الرمادي
+    inv = 255 - gray
 
-    # 3. إزالة النقاط الصغيرة (ضوضاء) عبر فلتر خفيف
-    cleaned = cv2.medianBlur(cleaned, 3)
+    # 3. Gaussian Blur
+    blur = cv2.GaussianBlur(inv, (21, 21), 0)
 
-    _, buf = cv2.imencode('.png', cleaned)
+    # 4. تأثير Pencil Sketch (color dodge blend)
+    sketch = cv2.divide(gray, 255 - blur, scale=256)
+
+    # 5. تعزيز بسيط للتباين بدون تدمير التفاصيل
+    sketch = cv2.normalize(sketch, None, 0, 255, cv2.NORM_MINMAX)
+    sketch = cv2.medianBlur(sketch, 3)  # تنعيم خفيف
+
+    # 6. تجهيز للإرسال
+    _, buf = cv2.imencode('.png', sketch)
     return send_file(io.BytesIO(buf), mimetype='image/png')
