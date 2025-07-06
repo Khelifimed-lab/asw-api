@@ -1,54 +1,44 @@
-from flask import Flask, request, send_file
+# app.py
+from flask import Flask, request, jsonify
+import base64
 import cv2
 import numpy as np
-import io
 
 app = Flask(__name__)
 
+@app.route('/')
+def index():
+    return "API is running!"
+
 @app.route('/sketch', methods=['POST'])
 def sketch():
-    img_array = np.frombuffer(request.data, np.uint8)
-    img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-    
-    if img is None:
-        return "Invalid image", 400
+    data = request.json
+    image_b64 = data.get('image_base64')
 
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    if not image_b64:
+        return jsonify({"error": "No image_base64 provided"}), 400
 
-    # تحليل ذكي للإضاءة والتباين
-    mean_brightness = np.mean(gray)
-    contrast = np.std(gray)
-    otsu_thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[0]
+    # Decode base64 to image
+    try:
+        image_data = base64.b64decode(image_b64)
+        np_arr = np.frombuffer(image_data, np.uint8)
+        img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    except Exception as e:
+        return jsonify({"error": "Image decode failed", "details": str(e)}), 500
 
-    # حساب عتبة البكسلات السوداء
-    if contrast < 15:
-        adjusted_thresh = max(0, otsu_thresh - 5)
-    elif contrast > 50:
-        adjusted_thresh = max(0, otsu_thresh - 20)
-    else:
-        adjusted_thresh = max(0, otsu_thresh - 10)
+    # Convert to sketch
+    try:
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        inv = 255 - gray
+        blur = cv2.GaussianBlur(inv, (21, 21), 0)
+        sketch = cv2.divide(gray, 255 - blur, scale=256)
 
-    if mean_brightness < 80:
-        adjusted_thresh += 5
-    elif mean_brightness > 180:
-        adjusted_thresh -= 5
+        _, buffer = cv2.imencode('.jpg', sketch)
+        output_b64 = base64.b64encode(buffer).decode('utf-8')
+    except Exception as e:
+        return jsonify({"error": "Sketch processing failed", "details": str(e)}), 500
 
-    black_mask = gray <= adjusted_thresh  # لحماية الأسود
-
-    # Gaussian Blur + تأثير الرسم
-    inv = 255 - gray
-    blur = cv2.GaussianBlur(inv, (21, 21), 0)
-    sketch = cv2.divide(gray, 255 - blur, scale=256)
-
-    # تعزيز الأسود من الأصل
-    sketch[black_mask] = gray[black_mask]
-
-    # تحسين التباين العام (اختياري)
-    sketch = cv2.normalize(sketch, None, 0, 255, cv2.NORM_MINMAX)
-
-    # تحويل إلى صورة قابلة للإرسال
-    _, buf = cv2.imencode('.png', sketch)
-    return send_file(io.BytesIO(buf), mimetype='image/png')
+    return jsonify({"sketch_base64": output_b64})
 
 if __name__ == '__main__':
     app.run(debug=True)
